@@ -6,8 +6,14 @@ namespace InfinityRunner
     [RequireComponent(typeof(Rigidbody))]
     public sealed class PlayerRunnerController : MonoBehaviour
     {
+        [Header("Visual")]
         public Transform visualRoot;
         public RunnerConfig config;
+
+        [Header("Power Up Visual")]
+        public Renderer invincibilityRenderer;
+        public Material normalVisualMaterial;
+        public Material invincibleVisualMaterial;
 
         private GameCoordinator coordinator;
         private Vector3 startingPosition;
@@ -70,6 +76,7 @@ namespace InfinityRunner
             controlsLocked = false;
             transform.position = new Vector3(config.LaneToX(Lane.Center), config.groundHeight, startingPosition.z);
             transform.rotation = startingRotation;
+            SetInvincibilityVisual(false);
         }
 
         public void SetControlsLocked(bool locked)
@@ -115,6 +122,34 @@ namespace InfinityRunner
             }
 
             verticalVelocity = Mathf.Min(verticalVelocity, -config.fastFallVelocity);
+        }
+
+        public void SetInvincibilityVisual(bool active)
+        {
+            if (invincibilityRenderer == null)
+            {
+                return;
+            }
+
+            Material targetMaterial = active ? invincibleVisualMaterial : normalVisualMaterial;
+            if (targetMaterial == null)
+            {
+                return;
+            }
+
+            Material[] sharedMaterials = invincibilityRenderer.sharedMaterials;
+            if (sharedMaterials == null || sharedMaterials.Length == 0)
+            {
+                invincibilityRenderer.sharedMaterial = targetMaterial;
+                return;
+            }
+
+            for (int i = 0; i < sharedMaterials.Length; i++)
+            {
+                sharedMaterials[i] = targetMaterial;
+            }
+
+            invincibilityRenderer.sharedMaterials = sharedMaterials;
         }
 
         private void UpdateLanePosition()

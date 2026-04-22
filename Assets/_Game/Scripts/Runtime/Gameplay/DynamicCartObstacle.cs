@@ -5,6 +5,7 @@ namespace InfinityRunner
 {
     public sealed class DynamicCartObstacle : DistanceTriggeredObstacle
     {
+        public bool syncTriggerLeadTimeFromTimings = true;
         public Transform movingRoot;
         public Renderer telegraphRenderer;
         public float telegraphDuration = 0.75f;
@@ -44,7 +45,10 @@ namespace InfinityRunner
                 attackRoutine = null;
             }
 
-            triggerLeadTime = telegraphDuration + moveDuration;
+            if (syncTriggerLeadTimeFromTimings)
+            {
+                triggerLeadTime = telegraphDuration + moveDuration;
+            }
 
             if (movingRoot != null)
             {

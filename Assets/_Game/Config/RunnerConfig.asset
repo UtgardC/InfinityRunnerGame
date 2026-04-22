@@ -24,6 +24,6 @@ MonoBehaviour:
   maxBlocksActive: 7
   touchSwipeThresholdPixels: 80
   touchTapMaxDuration: 0.25
-  distanceScorePerMeter: 1
+  metersPerSpeedUnit: 1
   personScore: 100
   destructibleScore: 25

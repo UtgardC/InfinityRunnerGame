@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: DifficultyStageConfig2
   m_EditorClassIdentifier: 
   stage: 1
-  speedMetersPerSecond: 15
+  speedMetersPerSecond: 13
   startAfterBlockCount: 10

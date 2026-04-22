@@ -1,29 +1,12 @@
-using System.Collections;
 using UnityEngine;
 
 namespace InfinityRunner
 {
     public sealed class FallingPillarObstacle : DistanceTriggeredObstacle
     {
-        public Transform pillarVisual;
-        public Collider uprightDeathCollider;
-        public Collider fallenDeathCollider;
-        public float telegraphDuration = 0.85f;
-        public float fallDuration = 0.45f;
-        public Vector3 fallenEulerAngles = new Vector3(0f, 0f, 90f);
-
-        private Quaternion startRotation;
-        private Coroutine fallRoutine;
-
-        private void Awake()
-        {
-            if (pillarVisual == null)
-            {
-                pillarVisual = transform;
-            }
-
-            startRotation = pillarVisual.localRotation;
-        }
+        public Animator pillarAnimator;
+        public string idleStateName = "Idle";
+        public string triggeredStateName = "Triggered";
 
         protected override void OnEnable()
         {
@@ -33,60 +16,29 @@ namespace InfinityRunner
 
         protected override void ResetObstacle()
         {
-            if (fallRoutine != null)
+            if (pillarAnimator == null)
             {
-                StopCoroutine(fallRoutine);
-                fallRoutine = null;
+                return;
             }
 
-            triggerLeadTime = telegraphDuration + fallDuration;
+            pillarAnimator.Rebind();
+            pillarAnimator.Update(0f);
 
-            if (pillarVisual != null)
+            if (!string.IsNullOrWhiteSpace(idleStateName))
             {
-                pillarVisual.localRotation = startRotation;
-            }
-
-            if (uprightDeathCollider != null)
-            {
-                uprightDeathCollider.enabled = true;
-            }
-
-            if (fallenDeathCollider != null)
-            {
-                fallenDeathCollider.enabled = false;
+                pillarAnimator.Play(idleStateName, 0, 0f);
+                pillarAnimator.Update(0f);
             }
         }
 
         protected override void HandleTriggered(float distanceToPlayer, float currentSpeed)
         {
-            fallRoutine = StartCoroutine(FallRoutine());
-        }
-
-        private IEnumerator FallRoutine()
-        {
-            yield return new WaitForSeconds(telegraphDuration);
-
-            Quaternion endRotation = Quaternion.Euler(fallenEulerAngles);
-            float elapsed = 0f;
-            while (elapsed < fallDuration)
+            if (pillarAnimator == null || string.IsNullOrWhiteSpace(triggeredStateName))
             {
-                elapsed += Time.deltaTime;
-                float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / fallDuration));
-                pillarVisual.localRotation = Quaternion.Slerp(startRotation, endRotation, t);
-                yield return null;
+                return;
             }
 
-            if (uprightDeathCollider != null)
-            {
-                uprightDeathCollider.enabled = false;
-            }
-
-            if (fallenDeathCollider != null)
-            {
-                fallenDeathCollider.enabled = true;
-            }
-
-            fallRoutine = null;
+            pillarAnimator.Play(triggeredStateName, 0, 0f);
         }
     }
 }

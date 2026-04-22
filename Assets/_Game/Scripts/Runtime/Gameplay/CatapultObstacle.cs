@@ -5,6 +5,7 @@ namespace InfinityRunner
 {
     public sealed class CatapultObstacle : DistanceTriggeredObstacle
     {
+        public bool syncTriggerLeadTimeFromTimings = true;
         public Animator catapultAnimator;
         public Transform arm;
         public Transform firePoint;
@@ -41,7 +42,10 @@ namespace InfinityRunner
                 fireRoutine = null;
             }
 
-            triggerLeadTime = telegraphDuration + launchAnimationDuration;
+            if (syncTriggerLeadTimeFromTimings)
+            {
+                triggerLeadTime = telegraphDuration + launchAnimationDuration;
+            }
 
             if (catapultAnimator != null)
             {

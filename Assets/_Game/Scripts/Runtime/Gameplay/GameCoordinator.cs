@@ -41,6 +41,7 @@ namespace InfinityRunner
         private float invincibleRemaining;
         private float scoreMultiplierRemaining;
         private int activeScoreMultiplier = 1;
+        private bool invincibilityVisualActive;
 
         public RunnerState State
         {
@@ -449,6 +450,7 @@ namespace InfinityRunner
             {
                 case PowerUpType.InvincibleRock:
                     invincibleRemaining = Mathf.Max(invincibleRemaining, definition.durationSeconds);
+                    RefreshInvincibilityVisual();
                     break;
                 case PowerUpType.ScoreMultiplier:
                     scoreMultiplierRemaining = Mathf.Max(scoreMultiplierRemaining, definition.durationSeconds);
@@ -459,23 +461,25 @@ namespace InfinityRunner
 
         private void UpdateActivePowerUps()
         {
-            if (!IsRunning)
-            {
-                return;
-            }
+            bool hadInvincibility = HasInvincibility;
 
-            if (invincibleRemaining > 0f)
+            if (IsRunning && invincibleRemaining > 0f)
             {
                 invincibleRemaining = Mathf.Max(0f, invincibleRemaining - Time.deltaTime);
             }
 
-            if (scoreMultiplierRemaining > 0f)
+            if (IsRunning && scoreMultiplierRemaining > 0f)
             {
                 scoreMultiplierRemaining = Mathf.Max(0f, scoreMultiplierRemaining - Time.deltaTime);
                 if (scoreMultiplierRemaining <= 0f)
                 {
                     activeScoreMultiplier = 1;
                 }
+            }
+
+            if (hadInvincibility != HasInvincibility)
+            {
+                RefreshInvincibilityVisual();
             }
         }
 
@@ -485,6 +489,7 @@ namespace InfinityRunner
             invincibleRemaining = 0f;
             scoreMultiplierRemaining = 0f;
             activeScoreMultiplier = 1;
+            RefreshInvincibilityVisual();
             ScheduleNextPowerUpAttempt();
         }
 
@@ -619,6 +624,18 @@ namespace InfinityRunner
             }
 
             score.AddBonus(basePoints * ActiveScoreMultiplier);
+        }
+
+        private void RefreshInvincibilityVisual()
+        {
+            bool shouldBeActive = HasInvincibility;
+            if (player == null || invincibilityVisualActive == shouldBeActive)
+            {
+                return;
+            }
+
+            player.SetInvincibilityVisual(shouldBeActive);
+            invincibilityVisualActive = shouldBeActive;
         }
 
         private void StartStateRoutine(IEnumerator routine)

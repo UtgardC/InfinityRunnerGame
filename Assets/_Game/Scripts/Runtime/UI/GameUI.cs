@@ -5,8 +5,6 @@ namespace InfinityRunner
 {
     public sealed class GameUI : MonoBehaviour
     {
-        private const float MetersToMiles = 0.000621371f;
-
         public GameCoordinator coordinator;
         public RunnerScore score;
 
@@ -18,10 +16,26 @@ namespace InfinityRunner
         public TMP_Text scoreText;
         public TMP_Text milesText;
 
+        [Header("Power Up HUD")]
+        public TMP_Text scoreMultiplierText;
+        [Min(0f)] public float scoreMultiplierPulseVariance = 0.12f;
+        [Min(0f)] public float scoreMultiplierPulseSpeed = 5f;
+
+        private Vector3 multiplierBaseScale;
+        private bool hasMultiplierBaseScale;
+
+        private void Awake()
+        {
+            CacheMultiplierBaseScale();
+        }
+
         private void Update()
         {
+            CacheMultiplierBaseScale();
+
             if (score == null)
             {
+                UpdateScoreMultiplierIndicator();
                 return;
             }
 
@@ -32,15 +46,17 @@ namespace InfinityRunner
 
             if (milesText != null)
             {
-                float miles = score.Distance * MetersToMiles;
-                milesText.text = miles.ToString("0.00");
+                milesText.text = Mathf.FloorToInt(score.Distance).ToString();
             }
+
+            UpdateScoreMultiplierIndicator();
         }
 
         public void ShowMenuState()
         {
             SetActive(hudRoot, false);
             SetActive(gameOverRoot, false);
+            HideScoreMultiplierIndicator();
         }
 
         public void ShowGameplay()
@@ -53,6 +69,7 @@ namespace InfinityRunner
         {
             SetActive(hudRoot, true);
             SetActive(gameOverRoot, true);
+            HideScoreMultiplierIndicator();
         }
 
         public void ReturnToMenuButton()
@@ -69,6 +86,60 @@ namespace InfinityRunner
             {
                 target.SetActive(value);
             }
+        }
+
+        private void UpdateScoreMultiplierIndicator()
+        {
+            if (scoreMultiplierText == null)
+            {
+                return;
+            }
+
+            bool isActive = coordinator != null
+                && coordinator.IsRunning
+                && coordinator.ActiveScoreMultiplier > 1;
+
+            if (!isActive)
+            {
+                HideScoreMultiplierIndicator();
+                return;
+            }
+
+            if (!scoreMultiplierText.gameObject.activeSelf)
+            {
+                scoreMultiplierText.gameObject.SetActive(true);
+            }
+
+            scoreMultiplierText.text = "X" + coordinator.ActiveScoreMultiplier;
+
+            float pulse = Mathf.Sin(Time.unscaledTime * scoreMultiplierPulseSpeed) * scoreMultiplierPulseVariance;
+            float scaleMultiplier = Mathf.Max(0.01f, 1f + pulse);
+            scoreMultiplierText.rectTransform.localScale = multiplierBaseScale * scaleMultiplier;
+        }
+
+        private void HideScoreMultiplierIndicator()
+        {
+            if (scoreMultiplierText == null)
+            {
+                return;
+            }
+
+            scoreMultiplierText.rectTransform.localScale = multiplierBaseScale;
+            if (scoreMultiplierText.gameObject.activeSelf)
+            {
+                scoreMultiplierText.gameObject.SetActive(false);
+            }
+        }
+
+        private void CacheMultiplierBaseScale()
+        {
+            if (hasMultiplierBaseScale || scoreMultiplierText == null)
+            {
+                return;
+            }
+
+            multiplierBaseScale = scoreMultiplierText.rectTransform.localScale;
+            hasMultiplierBaseScale = true;
         }
     }
 }
