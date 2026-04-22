@@ -15,12 +15,7 @@ namespace InfinityRunner
 
         private void Update()
         {
-            if (coordinator == null)
-            {
-                coordinator = GameCoordinator.Instance;
-            }
-
-            if (coordinator == null)
+            if (coordinator == null || config == null)
             {
                 return;
             }
@@ -49,7 +44,7 @@ namespace InfinityRunner
 
             if (keyboard.spaceKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame)
             {
-                coordinator.RequestPrimaryAction();
+                coordinator.RequestJump();
             }
 
             if (keyboard.rKey.wasPressedThisFrame)
@@ -61,7 +56,7 @@ namespace InfinityRunner
         private void ReadTouch()
         {
             Touchscreen touchscreen = Touchscreen.current;
-            if (touchscreen == null || config == null)
+            if (touchscreen == null)
             {
                 return;
             }
@@ -90,7 +85,7 @@ namespace InfinityRunner
                 }
                 else if (duration <= config.touchTapMaxDuration)
                 {
-                    coordinator.RequestPrimaryAction();
+                    coordinator.RequestJump();
                 }
             }
         }

@@ -6,21 +6,15 @@ namespace InfinityRunner
     public sealed class BlockDefinition : ScriptableObject
     {
         public GameObject prefab;
-        [Min(5f)] public float length = 30f;
-        public BlockKind kind = BlockKind.Safe;
         public DifficultyStageMask allowedStages = DifficultyStageMask.All;
-        [Min(0)] public int weight = 1;
-        public LaneMask safeLanes = LaneMask.All;
-        public LaneMask occupiedLanes = LaneMask.None;
-        public bool isSpecial;
+        [Min(1)] public int weight = 1;
 
-        public bool IsAllowed(DifficultyStage stage)
+        public bool Allows(DifficultyStage stage)
         {
-            DifficultyStageMask flag = DifficultyToMask(stage);
-            return (allowedStages & flag) != 0;
+            return (allowedStages & ToMask(stage)) != 0;
         }
 
-        public static DifficultyStageMask DifficultyToMask(DifficultyStage stage)
+        public static DifficultyStageMask ToMask(DifficultyStage stage)
         {
             switch (stage)
             {

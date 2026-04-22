@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 
 namespace InfinityRunner
@@ -10,6 +9,9 @@ namespace InfinityRunner
         public Transform visualRoot;
         public RunnerConfig config;
 
+        private GameCoordinator coordinator;
+        private Vector3 startingPosition;
+        private Quaternion startingRotation;
         private Lane currentLane = Lane.Center;
         private Lane targetLane = Lane.Center;
         private float laneChangeTime;
@@ -17,8 +19,6 @@ namespace InfinityRunner
         private float verticalVelocity;
         private bool grounded = true;
         private bool controlsLocked;
-        private bool hazardInvulnerable;
-        private Coroutine rampFlightRoutine;
 
         public Lane CurrentLane
         {
@@ -30,26 +30,11 @@ namespace InfinityRunner
             get { return grounded; }
         }
 
-        public bool IsHazardInvulnerable
-        {
-            get { return hazardInvulnerable; }
-        }
-
-        public float HeightAboveGround
-        {
-            get
-            {
-                if (config == null)
-                {
-                    return transform.position.y;
-                }
-
-                return transform.position.y - config.groundHeight;
-            }
-        }
-
         private void Awake()
         {
+            startingPosition = transform.position;
+            startingRotation = transform.rotation;
+
             Rigidbody body = GetComponent<Rigidbody>();
             body.isKinematic = true;
             body.useGravity = false;
@@ -70,28 +55,26 @@ namespace InfinityRunner
             RotateVisual();
         }
 
+        public void SetCoordinator(GameCoordinator owner)
+        {
+            coordinator = owner;
+        }
+
         public void ResetPlayer()
         {
-            StopRampFlight();
             currentLane = Lane.Center;
             targetLane = Lane.Center;
             laneChangeTime = 1f;
             verticalVelocity = 0f;
             grounded = true;
             controlsLocked = false;
-            hazardInvulnerable = false;
-            transform.position = new Vector3(config.LaneToX(Lane.Center), config.groundHeight, 0f);
-            transform.rotation = Quaternion.identity;
+            transform.position = new Vector3(config.LaneToX(Lane.Center), config.groundHeight, startingPosition.z);
+            transform.rotation = startingRotation;
         }
 
         public void SetControlsLocked(bool locked)
         {
             controlsLocked = locked;
-        }
-
-        public void SetHazardInvulnerable(bool invulnerable)
-        {
-            hazardInvulnerable = invulnerable;
         }
 
         public void ChangeLane(int direction)
@@ -115,64 +98,13 @@ namespace InfinityRunner
 
         public void Jump()
         {
-            if (controlsLocked || !grounded || rampFlightRoutine != null)
+            if (controlsLocked || !grounded)
             {
                 return;
             }
 
             grounded = false;
             verticalVelocity = config.jumpVelocity;
-        }
-
-        public bool ClearsHeight(float clearHeight)
-        {
-            return HeightAboveGround >= clearHeight;
-        }
-
-        public void BeginRampFlight(float duration, float height, float invulnerabilityPadding)
-        {
-            StopRampFlight();
-            rampFlightRoutine = StartCoroutine(RampFlightRoutine(duration, height, invulnerabilityPadding));
-        }
-
-        private void StopRampFlight()
-        {
-            if (rampFlightRoutine != null)
-            {
-                StopCoroutine(rampFlightRoutine);
-                rampFlightRoutine = null;
-            }
-        }
-
-        private IEnumerator RampFlightRoutine(float duration, float height, float invulnerabilityPadding)
-        {
-            controlsLocked = true;
-            hazardInvulnerable = true;
-            grounded = false;
-            verticalVelocity = 0f;
-
-            float elapsed = 0f;
-            float baseY = config.groundHeight;
-            while (elapsed < duration)
-            {
-                elapsed += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                float y = baseY + Mathf.Sin(t * Mathf.PI) * height;
-                transform.position = new Vector3(transform.position.x, y, transform.position.z);
-                yield return null;
-            }
-
-            transform.position = new Vector3(transform.position.x, baseY, transform.position.z);
-            grounded = true;
-            controlsLocked = false;
-
-            if (invulnerabilityPadding > 0f)
-            {
-                yield return new WaitForSeconds(invulnerabilityPadding);
-            }
-
-            hazardInvulnerable = false;
-            rampFlightRoutine = null;
         }
 
         private void UpdateLanePosition()
@@ -196,7 +128,7 @@ namespace InfinityRunner
 
         private void UpdateJump()
         {
-            if (grounded || rampFlightRoutine != null)
+            if (grounded)
             {
                 return;
             }
@@ -216,13 +148,28 @@ namespace InfinityRunner
 
         private void RotateVisual()
         {
-            if (visualRoot == null || GameCoordinator.Instance == null)
+            if (visualRoot == null || coordinator == null || config == null)
             {
                 return;
             }
 
-            float speed = GameCoordinator.Instance.CurrentWorldSpeed;
-            visualRoot.Rotate(Vector3.right, speed * 75f * Time.deltaTime, Space.Self);
+            visualRoot.Rotate(Vector3.right, coordinator.WorldSpeed * config.visualRollSpeed * Time.deltaTime, Space.Self);
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            if (coordinator != null)
+            {
+                coordinator.HandlePlayerContact(other);
+            }
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (coordinator != null)
+            {
+                coordinator.HandlePlayerContact(collision.collider);
+            }
         }
     }
 }

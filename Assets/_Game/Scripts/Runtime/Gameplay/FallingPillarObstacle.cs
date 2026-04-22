@@ -3,18 +3,17 @@ using UnityEngine;
 
 namespace InfinityRunner
 {
-    public sealed class FallingPillarObstacle : MonoBehaviour
+    public sealed class FallingPillarObstacle : DistanceTriggeredObstacle
     {
         public Transform pillarVisual;
-        public Collider verticalHazard;
-        public Collider fallenHazard;
-        public float activationDistance = 42f;
+        public Collider uprightDeathCollider;
+        public Collider fallenDeathCollider;
         public float telegraphDuration = 0.85f;
         public float fallDuration = 0.45f;
         public Vector3 fallenEulerAngles = new Vector3(0f, 0f, 90f);
 
-        private bool triggered;
         private Quaternion startRotation;
+        private Coroutine fallRoutine;
 
         private void Awake()
         {
@@ -26,38 +25,41 @@ namespace InfinityRunner
             startRotation = pillarVisual.localRotation;
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
-            triggered = false;
+            base.OnEnable();
+            ResetObstacle();
+        }
+
+        protected override void ResetObstacle()
+        {
+            if (fallRoutine != null)
+            {
+                StopCoroutine(fallRoutine);
+                fallRoutine = null;
+            }
+
+            triggerLeadTime = telegraphDuration + fallDuration;
+
             if (pillarVisual != null)
             {
                 pillarVisual.localRotation = startRotation;
             }
 
-            if (verticalHazard != null)
+            if (uprightDeathCollider != null)
             {
-                verticalHazard.enabled = true;
+                uprightDeathCollider.enabled = true;
             }
 
-            if (fallenHazard != null)
+            if (fallenDeathCollider != null)
             {
-                fallenHazard.enabled = false;
+                fallenDeathCollider.enabled = false;
             }
         }
 
-        private void Update()
+        protected override void HandleTriggered(float distanceToPlayer, float currentSpeed)
         {
-            if (triggered || GameCoordinator.Instance == null || GameCoordinator.Instance.Player == null)
-            {
-                return;
-            }
-
-            float zDistance = transform.position.z - GameCoordinator.Instance.Player.transform.position.z;
-            if (zDistance <= activationDistance && zDistance > 0f)
-            {
-                triggered = true;
-                StartCoroutine(FallRoutine());
-            }
+            fallRoutine = StartCoroutine(FallRoutine());
         }
 
         private IEnumerator FallRoutine()
@@ -74,15 +76,17 @@ namespace InfinityRunner
                 yield return null;
             }
 
-            if (verticalHazard != null)
+            if (uprightDeathCollider != null)
             {
-                verticalHazard.enabled = false;
+                uprightDeathCollider.enabled = false;
             }
 
-            if (fallenHazard != null)
+            if (fallenDeathCollider != null)
             {
-                fallenHazard.enabled = true;
+                fallenDeathCollider.enabled = true;
             }
+
+            fallRoutine = null;
         }
     }
 }

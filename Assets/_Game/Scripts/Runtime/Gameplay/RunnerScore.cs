@@ -11,12 +11,21 @@ namespace InfinityRunner
 
         public int TotalScore
         {
-            get { return Mathf.FloorToInt(distance * config.distanceScorePerMeter) + bonusScore; }
+            get
+            {
+                float distanceMultiplier = config != null ? config.distanceScorePerMeter : 0f;
+                return Mathf.FloorToInt(distance * distanceMultiplier) + bonusScore;
+            }
         }
 
         public float Distance
         {
             get { return distance; }
+        }
+
+        public int BonusScore
+        {
+            get { return bonusScore; }
         }
 
         public void ResetScore()

@@ -5,9 +5,8 @@ namespace InfinityRunner
     [RequireComponent(typeof(Collider))]
     public sealed class RunnerInteractable : MonoBehaviour
     {
-        public RunnerInteractableType type = RunnerInteractableType.Destructible;
-        public int scoreOverride;
-        public float jumpClearHeight = 1.25f;
+        public RunnerInteractableType interactionType = RunnerInteractableType.Death;
+        public int score;
         public bool singleUse = true;
 
         private bool consumed;
@@ -15,6 +14,11 @@ namespace InfinityRunner
         public bool IsConsumed
         {
             get { return consumed; }
+        }
+
+        public int ResolveScore(int defaultScore)
+        {
+            return score != 0 ? score : defaultScore;
         }
 
         public void ResetInteraction()
@@ -41,26 +45,6 @@ namespace InfinityRunner
         private void OnEnable()
         {
             consumed = false;
-        }
-
-        private void OnTriggerEnter(Collider other)
-        {
-            if (consumed)
-            {
-                return;
-            }
-
-            PlayerRunnerController player = other.GetComponentInParent<PlayerRunnerController>();
-            if (player == null)
-            {
-                return;
-            }
-
-            GameCoordinator coordinator = GameCoordinator.Instance;
-            if (coordinator != null)
-            {
-                coordinator.HandleInteractable(this, player);
-            }
         }
     }
 }

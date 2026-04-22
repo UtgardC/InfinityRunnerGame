@@ -3,17 +3,17 @@ using UnityEngine;
 
 namespace InfinityRunner
 {
-    public sealed class DynamicCartObstacle : MonoBehaviour
+    public sealed class DynamicCartObstacle : DistanceTriggeredObstacle
     {
         public Transform movingRoot;
         public Renderer telegraphRenderer;
-        public float activationDistance = 38f;
         public float telegraphDuration = 0.75f;
         public float moveDuration = 0.35f;
+        public float laneOffset;
 
-        private bool triggered;
         private Color originalColor;
         private Vector3 initialLocalPosition;
+        private Coroutine attackRoutine;
 
         private void Awake()
         {
@@ -22,7 +22,7 @@ namespace InfinityRunner
                 movingRoot = transform;
             }
 
-            if (telegraphRenderer != null)
+            if (telegraphRenderer != null && telegraphRenderer.sharedMaterial != null)
             {
                 originalColor = telegraphRenderer.sharedMaterial.color;
             }
@@ -30,48 +30,52 @@ namespace InfinityRunner
             initialLocalPosition = movingRoot.localPosition;
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
-            triggered = false;
+            base.OnEnable();
+            ResetObstacle();
+        }
+
+        protected override void ResetObstacle()
+        {
+            if (attackRoutine != null)
+            {
+                StopCoroutine(attackRoutine);
+                attackRoutine = null;
+            }
+
+            triggerLeadTime = telegraphDuration + moveDuration;
+
             if (movingRoot != null)
             {
                 movingRoot.localPosition = initialLocalPosition;
             }
 
-            if (telegraphRenderer != null)
+            if (telegraphRenderer != null && telegraphRenderer.material != null)
             {
                 telegraphRenderer.material.color = originalColor;
             }
         }
 
-        private void Update()
+        protected override void HandleTriggered(float distanceToPlayer, float currentSpeed)
         {
-            if (triggered || GameCoordinator.Instance == null || GameCoordinator.Instance.Player == null)
-            {
-                return;
-            }
-
-            float zDistance = transform.position.z - GameCoordinator.Instance.Player.transform.position.z;
-            if (zDistance <= activationDistance && zDistance > 0f)
-            {
-                triggered = true;
-                StartCoroutine(AttackRoutine());
-            }
+            attackRoutine = StartCoroutine(AttackRoutine());
         }
 
         private IEnumerator AttackRoutine()
         {
-            if (telegraphRenderer != null)
+            if (telegraphRenderer != null && telegraphRenderer.material != null)
             {
                 telegraphRenderer.material.color = Color.red;
             }
 
             yield return new WaitForSeconds(telegraphDuration);
 
-            RunnerConfig config = GameCoordinator.Instance.Config;
-            Lane targetLane = GameCoordinator.Instance.Player.CurrentLane;
+            GameCoordinator coordinator = GameCoordinator.Instance;
+            RunnerConfig runnerConfig = coordinator != null ? coordinator.Config : null;
+            Lane targetLane = coordinator != null && coordinator.Player != null ? coordinator.Player.CurrentLane : Lane.Center;
             float startX = movingRoot.localPosition.x;
-            float targetX = config != null ? config.LaneToX(targetLane) : (int)targetLane * 3f;
+            float targetX = (runnerConfig != null ? runnerConfig.LaneToX(targetLane) : 0f) + laneOffset;
 
             float elapsed = 0f;
             while (elapsed < moveDuration)
@@ -83,6 +87,8 @@ namespace InfinityRunner
                 movingRoot.localPosition = local;
                 yield return null;
             }
+
+            attackRoutine = null;
         }
     }
 }

@@ -3,19 +3,19 @@ using UnityEngine;
 
 namespace InfinityRunner
 {
-    public sealed class CatapultObstacle : MonoBehaviour
+    public sealed class CatapultObstacle : DistanceTriggeredObstacle
     {
         public Transform arm;
         public Transform firePoint;
-        public RunnerInteractable projectilePrefab;
+        public MovingHazardProjectile projectilePrefab;
         public Renderer warningRenderer;
-        public float activationDistance = 55f;
         public float telegraphDuration = 1.1f;
+        public float launchAnimationDuration = 0.2f;
         public float projectileSpeed = 42f;
         public float projectileLifetime = 2.2f;
 
-        private bool fired;
         private Quaternion armStartRotation;
+        private Coroutine fireRoutine;
 
         private void Awake()
         {
@@ -25,9 +25,22 @@ namespace InfinityRunner
             }
         }
 
-        private void OnEnable()
+        protected override void OnEnable()
         {
-            fired = false;
+            base.OnEnable();
+            ResetObstacle();
+        }
+
+        protected override void ResetObstacle()
+        {
+            if (fireRoutine != null)
+            {
+                StopCoroutine(fireRoutine);
+                fireRoutine = null;
+            }
+
+            triggerLeadTime = telegraphDuration + launchAnimationDuration;
+
             if (arm != null)
             {
                 arm.localRotation = armStartRotation;
@@ -39,19 +52,9 @@ namespace InfinityRunner
             }
         }
 
-        private void Update()
+        protected override void HandleTriggered(float distanceToPlayer, float currentSpeed)
         {
-            if (fired || GameCoordinator.Instance == null || GameCoordinator.Instance.Player == null)
-            {
-                return;
-            }
-
-            float zDistance = transform.position.z - GameCoordinator.Instance.Player.transform.position.z;
-            if (zDistance <= activationDistance && zDistance > 0f)
-            {
-                fired = true;
-                StartCoroutine(FireRoutine());
-            }
+            fireRoutine = StartCoroutine(FireRoutine());
         }
 
         private IEnumerator FireRoutine()
@@ -74,25 +77,30 @@ namespace InfinityRunner
 
             if (projectilePrefab != null)
             {
-                RunnerInteractable projectile = Instantiate(projectilePrefab, firePoint != null ? firePoint.position : transform.position, Quaternion.identity, transform.parent);
-                StartCoroutine(ProjectileRoutine(projectile.transform));
+                Vector3 spawnPosition = firePoint != null ? firePoint.position : transform.position;
+                Quaternion spawnRotation = firePoint != null ? firePoint.rotation : Quaternion.identity;
+                MovingHazardProjectile projectile = Instantiate(projectilePrefab, spawnPosition, spawnRotation, transform.parent);
+                projectile.Launch(Vector3.back, projectileSpeed, projectileLifetime);
             }
-        }
 
-        private IEnumerator ProjectileRoutine(Transform projectile)
-        {
-            float elapsed = 0f;
-            while (projectile != null && elapsed < projectileLifetime)
+            elapsed = 0f;
+            while (elapsed < launchAnimationDuration)
             {
                 elapsed += Time.deltaTime;
-                projectile.position += Vector3.back * projectileSpeed * Time.deltaTime;
+                if (arm != null)
+                {
+                    float t = Mathf.Clamp01(elapsed / launchAnimationDuration);
+                    arm.localRotation = armStartRotation * Quaternion.Euler(Mathf.Lerp(-55f, 20f, t), 0f, 0f);
+                }
                 yield return null;
             }
 
-            if (projectile != null)
+            if (warningRenderer != null)
             {
-                Destroy(projectile.gameObject);
+                warningRenderer.enabled = false;
             }
+
+            fireRoutine = null;
         }
     }
 }

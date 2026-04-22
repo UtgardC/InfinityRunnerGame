@@ -8,21 +8,15 @@ namespace InfinityRunner
         public RunnerConfig config;
         public DifficultyStageConfig[] difficultyStages;
         public BlockDefinition[] blockDefinitions;
-        public PowerUpDefinition[] powerUps;
         public Transform worldRoot;
 
         private readonly List<BlockRuntime> activeBlocks = new List<BlockRuntime>();
         private readonly Dictionary<BlockDefinition, Queue<GameObject>> blockPools = new Dictionary<BlockDefinition, Queue<GameObject>>();
-        private readonly Dictionary<GameObject, Queue<GameObject>> prefabPools = new Dictionary<GameObject, Queue<GameObject>>();
         private readonly List<BlockDefinition> weightedCandidates = new List<BlockDefinition>();
 
         private int stageIndex;
-        private float nextSpawnZ;
-        private int blocksSinceClash;
-        private int lateBlocksSinceClash;
-        private int blocksUntilPowerUp;
-        private PowerUpDefinition pendingPowerUp;
-        private bool forceFallingBlock;
+        private int spawnedBlockCount;
+        private float nextSpawnLocalZ;
         private bool running;
 
         public DifficultyStage CurrentStage
@@ -61,36 +55,50 @@ namespace InfinityRunner
         {
             if (worldRoot == null)
             {
-                GameObject root = new GameObject("Generated World");
-                root.transform.SetParent(transform, false);
-                worldRoot = root.transform;
+                worldRoot = transform;
             }
         }
 
         private void Update()
         {
-            if (!running || GameCoordinator.Instance == null || GameCoordinator.Instance.State != RunnerState.Running)
+            if (!running || config == null || worldRoot == null)
             {
                 return;
             }
 
             float distance = CurrentSpeed * Time.deltaTime;
             MoveWorld(distance);
-            GameCoordinator.Instance.AddDistance(distance);
+            if (GameCoordinator.Instance != null)
+            {
+                GameCoordinator.Instance.AddDistance(distance);
+            }
             EnsureBlocksAhead();
             DespawnPassedBlocks();
         }
 
-        public void ResetGenerator()
+        public void BeginRun()
+        {
+            ResetWorld();
+            running = true;
+            EnsureBlocksAhead();
+        }
+
+        public void StopRun()
+        {
+            running = false;
+        }
+
+        public void ResetWorld()
         {
             running = false;
             stageIndex = 0;
-            nextSpawnZ = 0f;
-            blocksSinceClash = 0;
-            lateBlocksSinceClash = 999;
-            blocksUntilPowerUp = Mathf.Max(1, config != null ? config.powerUpCooldownBlocks : 3);
-            pendingPowerUp = null;
-            forceFallingBlock = false;
+            spawnedBlockCount = 0;
+            nextSpawnLocalZ = 0f;
+
+            if (worldRoot != null)
+            {
+                worldRoot.localPosition = Vector3.zero;
+            }
 
             for (int i = activeBlocks.Count - 1; i >= 0; i--)
             {
@@ -100,116 +108,70 @@ namespace InfinityRunner
             activeBlocks.Clear();
         }
 
-        public void BeginGeneration()
-        {
-            ResetGenerator();
-            running = true;
-            EnsureBlocksAhead();
-        }
-
-        public void StopGeneration()
-        {
-            running = false;
-        }
-
-        public void ResumeGeneration()
-        {
-            running = true;
-        }
-
-        public void ScheduleFallingBlock()
-        {
-            forceFallingBlock = true;
-        }
-
-        public void AdvanceDifficultyAfterClash()
-        {
-            blocksSinceClash = 0;
-            lateBlocksSinceClash = 0;
-
-            if (stageIndex < difficultyStages.Length - 1)
-            {
-                stageIndex++;
-            }
-        }
-
         private void MoveWorld(float distance)
         {
-            for (int i = 0; i < activeBlocks.Count; i++)
-            {
-                if (activeBlocks[i].Root != null)
-                {
-                    activeBlocks[i].Root.transform.position += Vector3.back * distance;
-                }
-            }
-
-            nextSpawnZ -= distance;
+            worldRoot.position += Vector3.back * distance;
         }
 
         private void EnsureBlocksAhead()
         {
-            if (config == null)
+            if (config == null || worldRoot == null)
             {
                 return;
             }
 
-            while (nextSpawnZ < config.spawnAheadDistance && activeBlocks.Count < config.maxBlocksActive)
+            while (ShouldSpawnAnotherBlock())
             {
+                UpdateStageFromProgress();
                 BlockDefinition definition = SelectNextBlock();
                 if (definition == null)
                 {
                     return;
                 }
 
-                SpawnBlock(definition, nextSpawnZ);
-                nextSpawnZ += Mathf.Max(5f, definition.length);
+                SpawnBlock(definition, nextSpawnLocalZ);
             }
+        }
+
+        private bool ShouldSpawnAnotherBlock()
+        {
+            if (activeBlocks.Count >= config.maxBlocksActive)
+            {
+                return false;
+            }
+
+            if (activeBlocks.Count == 0)
+            {
+                return true;
+            }
+
+            BlockRuntime lastBlock = activeBlocks[activeBlocks.Count - 1];
+            return lastBlock.Root.transform.position.z + lastBlock.Length < config.spawnAheadDistance;
         }
 
         private BlockDefinition SelectNextBlock()
         {
-            if (forceFallingBlock)
-            {
-                BlockDefinition falling = FindSpecialBlock(BlockKind.FallingBlock);
-                if (falling != null)
-                {
-                    forceFallingBlock = false;
-                    return falling;
-                }
-            }
-
-            BlockDefinition clash = FindSpecialBlock(BlockKind.Clash);
-            DifficultyStageConfig stageConfig = CurrentStageConfig;
-            if (stageConfig != null && clash != null)
-            {
-                bool shouldForceProgressionClash = stageIndex < difficultyStages.Length - 1 && blocksSinceClash >= stageConfig.blocksBeforeForcedClash;
-                bool shouldLateClash = stageIndex == difficultyStages.Length - 1
-                    && lateBlocksSinceClash >= stageConfig.minimumBlocksBetweenLateClashes
-                    && Random.value <= stageConfig.lateClashChance;
-
-                if (shouldForceProgressionClash || shouldLateClash)
-                {
-                    blocksSinceClash = 0;
-                    lateBlocksSinceClash = 0;
-                    return clash;
-                }
-            }
-
             weightedCandidates.Clear();
+
+            if (blockDefinitions == null)
+            {
+                return null;
+            }
+
             for (int i = 0; i < blockDefinitions.Length; i++)
             {
                 BlockDefinition definition = blockDefinitions[i];
-                if (definition == null || definition.prefab == null || definition.weight <= 0 || definition.kind == BlockKind.Clash || definition.kind == BlockKind.FallingBlock)
+                if (definition == null || definition.prefab == null || definition.weight <= 0)
                 {
                     continue;
                 }
 
-                if (!definition.IsAllowed(CurrentStage))
+                if (!definition.Allows(CurrentStage))
                 {
                     continue;
                 }
 
-                for (int w = 0; w < definition.weight; w++)
+                for (int weightIndex = 0; weightIndex < definition.weight; weightIndex++)
                 {
                     weightedCandidates.Add(definition);
                 }
@@ -217,37 +179,33 @@ namespace InfinityRunner
 
             if (weightedCandidates.Count == 0)
             {
-                return FindFallbackSafeBlock();
+                return null;
             }
 
             return weightedCandidates[Random.Range(0, weightedCandidates.Count)];
         }
 
-        private void SpawnBlock(BlockDefinition definition, float z)
+        private void SpawnBlock(BlockDefinition definition, float localZ)
         {
             GameObject instance = GetBlockInstance(definition);
+            BlockMetadata metadata = instance.GetComponent<BlockMetadata>();
+            if (metadata == null)
+            {
+                Debug.LogError("Each block prefab needs a BlockMetadata component.", instance);
+                instance.SetActive(false);
+                return;
+            }
+
             Transform instanceTransform = instance.transform;
             instanceTransform.SetParent(worldRoot, false);
-            instanceTransform.position = new Vector3(0f, 0f, z);
+            instanceTransform.localPosition = new Vector3(0f, 0f, localZ);
             instanceTransform.rotation = Quaternion.identity;
             instance.SetActive(true);
+            ResetInteractables(instance);
 
-            BlockMetadata metadata = instance.GetComponent<BlockMetadata>();
-            if (metadata != null)
-            {
-                metadata.length = definition.length;
-                metadata.kind = definition.kind;
-                ResetInteractables(instance);
-                SpawnPowerUpIfNeeded(definition, metadata);
-            }
-
-            activeBlocks.Add(new BlockRuntime(definition, instance, metadata));
-
-            if (definition.kind != BlockKind.Clash && definition.kind != BlockKind.FallingBlock)
-            {
-                blocksSinceClash++;
-                lateBlocksSinceClash++;
-            }
+            activeBlocks.Add(new BlockRuntime(definition, instance, metadata.length));
+            nextSpawnLocalZ += metadata.length;
+            spawnedBlockCount++;
         }
 
         private GameObject GetBlockInstance(BlockDefinition definition)
@@ -271,8 +229,7 @@ namespace InfinityRunner
             for (int i = activeBlocks.Count - 1; i >= 0; i--)
             {
                 BlockRuntime block = activeBlocks[i];
-                float length = block.Definition != null ? block.Definition.length : 30f;
-                if (block.Root.transform.position.z + length < -config.despawnBehindDistance)
+                if (block.Root.transform.position.z + block.Length < -config.despawnBehindDistance)
                 {
                     activeBlocks.RemoveAt(i);
                     DespawnBlock(block);
@@ -287,141 +244,17 @@ namespace InfinityRunner
                 return;
             }
 
-            if (block.Metadata != null)
-            {
-                IReadOnlyList<GameObject> spawnedObjects = block.Metadata.SpawnedPooledObjects;
-                for (int i = 0; i < spawnedObjects.Count; i++)
-                {
-                    ReturnPooledPrefab(spawnedObjects[i]);
-                }
-                block.Metadata.ClearSpawnedObjects();
-            }
-
             block.Root.SetActive(false);
+            block.Root.transform.SetParent(transform, false);
+
             Queue<GameObject> pool;
             if (!blockPools.TryGetValue(block.Definition, out pool))
             {
                 pool = new Queue<GameObject>();
                 blockPools.Add(block.Definition, pool);
             }
+
             pool.Enqueue(block.Root);
-        }
-
-        private void SpawnPowerUpIfNeeded(BlockDefinition definition, BlockMetadata metadata)
-        {
-            if (config == null || powerUps == null || powerUps.Length == 0 || definition.kind == BlockKind.Clash || definition.kind == BlockKind.FallingBlock)
-            {
-                return;
-            }
-
-            if (pendingPowerUp == null)
-            {
-                if (blocksUntilPowerUp > 0)
-                {
-                    blocksUntilPowerUp--;
-                }
-                else if (Random.value <= config.powerUpChancePerEligibleBlock)
-                {
-                    pendingPowerUp = powerUps[Random.Range(0, powerUps.Length)];
-                }
-            }
-
-            if (pendingPowerUp == null)
-            {
-                return;
-            }
-
-            PowerUpSpawnPoint[] points = metadata.GetPowerUpSpawnPoints();
-            List<PowerUpSpawnPoint> compatible = new List<PowerUpSpawnPoint>();
-            for (int i = 0; i < points.Length; i++)
-            {
-                if (points[i] != null && points[i].Allows(pendingPowerUp.type))
-                {
-                    compatible.Add(points[i]);
-                }
-            }
-
-            if (compatible.Count == 0)
-            {
-                return;
-            }
-
-            PowerUpSpawnPoint point = compatible[Random.Range(0, compatible.Count)];
-            GameObject pickup = SpawnPooledPrefab(pendingPowerUp.pickupPrefab, point.transform.position, point.transform.rotation, metadata.transform);
-            PowerUpPickup powerUpPickup = pickup.GetComponent<PowerUpPickup>();
-            if (powerUpPickup != null)
-            {
-                powerUpPickup.definition = pendingPowerUp;
-            }
-
-            metadata.RegisterSpawnedObject(pickup);
-
-            if (pendingPowerUp.requiresFallingBlockAfterPickup || pendingPowerUp.type == PowerUpType.DivineRamp)
-            {
-                ScheduleFallingBlock();
-            }
-
-            pendingPowerUp = null;
-            blocksUntilPowerUp = config.powerUpCooldownBlocks;
-        }
-
-        private GameObject SpawnPooledPrefab(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent)
-        {
-            if (prefab == null)
-            {
-                return null;
-            }
-
-            Queue<GameObject> pool;
-            GameObject instance;
-            if (prefabPools.TryGetValue(prefab, out pool) && pool.Count > 0)
-            {
-                instance = pool.Dequeue();
-            }
-            else
-            {
-                instance = Instantiate(prefab);
-                PooledPrefabMarker marker = instance.GetComponent<PooledPrefabMarker>();
-                if (marker == null)
-                {
-                    marker = instance.AddComponent<PooledPrefabMarker>();
-                }
-                marker.prefab = prefab;
-            }
-
-            instance.transform.SetParent(parent, true);
-            instance.transform.position = position;
-            instance.transform.rotation = rotation;
-            instance.SetActive(true);
-            ResetInteractables(instance);
-            return instance;
-        }
-
-        private void ReturnPooledPrefab(GameObject instance)
-        {
-            if (instance == null)
-            {
-                return;
-            }
-
-            PooledPrefabMarker marker = instance.GetComponent<PooledPrefabMarker>();
-            if (marker == null || marker.prefab == null)
-            {
-                Destroy(instance);
-                return;
-            }
-
-            instance.SetActive(false);
-            instance.transform.SetParent(transform, false);
-
-            Queue<GameObject> pool;
-            if (!prefabPools.TryGetValue(marker.prefab, out pool))
-            {
-                pool = new Queue<GameObject>();
-                prefabPools.Add(marker.prefab, pool);
-            }
-
-            pool.Enqueue(instance);
         }
 
         private void ResetInteractables(GameObject root)
@@ -433,55 +266,38 @@ namespace InfinityRunner
             }
         }
 
-        private BlockDefinition FindSpecialBlock(BlockKind kind)
+        private void UpdateStageFromProgress()
         {
-            if (blockDefinitions == null)
+            if (difficultyStages == null || difficultyStages.Length == 0)
             {
-                return null;
+                stageIndex = 0;
+                return;
             }
 
-            for (int i = 0; i < blockDefinitions.Length; i++)
+            int resolvedStageIndex = 0;
+            for (int i = 0; i < difficultyStages.Length; i++)
             {
-                BlockDefinition definition = blockDefinitions[i];
-                if (definition != null && definition.kind == kind && definition.prefab != null)
+                DifficultyStageConfig stage = difficultyStages[i];
+                if (stage != null && spawnedBlockCount >= stage.startAfterBlockCount)
                 {
-                    return definition;
+                    resolvedStageIndex = i;
                 }
             }
 
-            return null;
-        }
-
-        private BlockDefinition FindFallbackSafeBlock()
-        {
-            if (blockDefinitions == null)
-            {
-                return null;
-            }
-
-            for (int i = 0; i < blockDefinitions.Length; i++)
-            {
-                BlockDefinition definition = blockDefinitions[i];
-                if (definition != null && definition.kind == BlockKind.Safe && definition.prefab != null)
-                {
-                    return definition;
-                }
-            }
-
-            return blockDefinitions.Length > 0 ? blockDefinitions[0] : null;
+            stageIndex = Mathf.Clamp(resolvedStageIndex, 0, difficultyStages.Length - 1);
         }
 
         private readonly struct BlockRuntime
         {
             public readonly BlockDefinition Definition;
             public readonly GameObject Root;
-            public readonly BlockMetadata Metadata;
+            public readonly float Length;
 
-            public BlockRuntime(BlockDefinition definition, GameObject root, BlockMetadata metadata)
+            public BlockRuntime(BlockDefinition definition, GameObject root, float length)
             {
                 Definition = definition;
                 Root = root;
-                Metadata = metadata;
+                Length = length;
             }
         }
     }
