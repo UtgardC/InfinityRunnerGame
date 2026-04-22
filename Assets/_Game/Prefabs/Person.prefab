@@ -141,8 +141,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   moveSpeed: 2.4
-  obstacleCheckDistance: 1.5
-  rayOriginHeight: 0.5
+  obstacleCheckDistance: 2
+  rayOriginHeight: 0.1
   deathLayers:
     serializedVersion: 2
     m_Bits: 64

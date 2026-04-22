@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b60aded296d1ae24c9a91218dd87884d, type: 3}
   m_Name: TestBlock 6
   m_EditorClassIdentifier: 
-  prefab: {fileID: 7146306973329305907, guid: 9bd8e715bb75c6a4c8853dc56316de5e, type: 3}
+  prefab: {fileID: 4037884365795284879, guid: 4d35aac2318242b4b90f01f1cf78e37b, type: 3}
   allowedStages: -1
   weight: 5
