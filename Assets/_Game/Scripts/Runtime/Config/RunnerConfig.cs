@@ -25,8 +25,10 @@ namespace InfinityRunner
         [Min(8f)] public float touchSwipeThresholdPixels = 80f;
         [Min(0.01f)] public float touchTapMaxDuration = 0.25f;
 
+        [Header("Distance")]
+        [Min(1)] public int metersPerSpeedUnit = 10;
+
         [Header("Score")]
-        [Min(0f)] public float distanceScorePerMeter = 1f;
         public int personScore = 100;
         public int destructibleScore = 25;
 

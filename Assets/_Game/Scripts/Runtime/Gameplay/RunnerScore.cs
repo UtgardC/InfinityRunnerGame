@@ -11,11 +11,7 @@ namespace InfinityRunner
 
         public int TotalScore
         {
-            get
-            {
-                float distanceMultiplier = config != null ? config.distanceScorePerMeter : 0f;
-                return Mathf.FloorToInt(distance * distanceMultiplier) + bonusScore;
-            }
+            get { return bonusScore; }
         }
 
         public float Distance
@@ -34,14 +30,14 @@ namespace InfinityRunner
             bonusScore = 0;
         }
 
-        public void AddDistance(float meters)
+        public void AddDistance(float worldDistance)
         {
-            if (config == null || meters <= 0f)
+            if (config == null || worldDistance <= 0f)
             {
                 return;
             }
 
-            distance += meters;
+            distance += worldDistance * Mathf.Max(1, config.metersPerSpeedUnit);
         }
 
         public void AddBonus(int points)

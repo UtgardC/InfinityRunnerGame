@@ -4,8 +4,11 @@ namespace InfinityRunner
 {
     public enum RunnerState
     {
+        Menu,
+        TransitionToRun,
         Running,
-        GameOver
+        GameOver,
+        TransitionToMenu
     }
 
     public enum Lane
@@ -36,12 +39,28 @@ namespace InfinityRunner
     {
         Death,
         Person,
-        Destructible
+        Destructible,
+        PowerUp
     }
 
     public enum DestructionMode
     {
         InstantVfx,
         PrebakedBreak
+    }
+
+    public enum PowerUpType
+    {
+        InvincibleRock,
+        ScoreMultiplier
+    }
+
+    [Flags]
+    public enum PowerUpTypeMask
+    {
+        None = 0,
+        InvincibleRock = 1 << 0,
+        ScoreMultiplier = 1 << 1,
+        All = InvincibleRock | ScoreMultiplier
     }
 }

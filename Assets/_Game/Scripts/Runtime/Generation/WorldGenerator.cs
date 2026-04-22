@@ -18,6 +18,7 @@ namespace InfinityRunner
         private int stageIndex;
         private int spawnedBlockCount;
         private float nextSpawnLocalZ;
+        private float speedScale = 1f;
         private bool running;
 
         public DifficultyStage CurrentStage
@@ -36,6 +37,11 @@ namespace InfinityRunner
                 DifficultyStageConfig stage = CurrentStageConfig;
                 return stage != null ? stage.speedMetersPerSecond : 0f;
             }
+        }
+
+        public float EffectiveSpeed
+        {
+            get { return running ? CurrentSpeed * speedScale : 0f; }
         }
 
         public DifficultyStageConfig CurrentStageConfig
@@ -67,7 +73,13 @@ namespace InfinityRunner
                 return;
             }
 
-            float distance = CurrentSpeed * Time.deltaTime;
+            float distance = EffectiveSpeed * Time.deltaTime;
+            if (distance <= 0f)
+            {
+                EnsureBlocksAhead();
+                return;
+            }
+
             MoveBlocks(distance);
             if (GameCoordinator.Instance != null)
             {
@@ -77,10 +89,25 @@ namespace InfinityRunner
             DespawnPassedBlocks();
         }
 
-        public void BeginRun()
+        public void PrepareMenuPreview()
+        {
+            ResetWorld();
+            SetSpeedScale(0f);
+            SpawnInitialBlockIfAssigned();
+        }
+
+        public void BeginRunFromPreview(float initialSpeedScale)
+        {
+            SetSpeedScale(initialSpeedScale);
+            running = true;
+            EnsureBlocksAhead();
+        }
+
+        public void RestartGameplay(float initialSpeedScale)
         {
             ResetWorld();
             SpawnInitialBlockIfAssigned();
+            SetSpeedScale(initialSpeedScale);
             running = true;
             EnsureBlocksAhead();
         }
@@ -88,6 +115,12 @@ namespace InfinityRunner
         public void StopRun()
         {
             running = false;
+            SetSpeedScale(0f);
+        }
+
+        public void SetSpeedScale(float normalizedScale)
+        {
+            speedScale = Mathf.Clamp01(normalizedScale);
         }
 
         public void ResetWorld()
@@ -96,6 +129,7 @@ namespace InfinityRunner
             stageIndex = 0;
             spawnedBlockCount = 0;
             nextSpawnLocalZ = 0f;
+            speedScale = 1f;
 
             if (worldRoot != null)
             {
@@ -229,13 +263,18 @@ namespace InfinityRunner
             instanceTransform.localPosition = new Vector3(0f, 0f, localZ);
             instanceTransform.rotation = Quaternion.identity;
             instance.SetActive(true);
-            ResetInteractables(instance);
+            ResetBlockRuntime(instance);
 
             activeBlocks.Add(new BlockRuntime(definition, instance, metadata.length, returnToPool));
             nextSpawnLocalZ += metadata.length;
             if (countsAsProgress)
             {
                 spawnedBlockCount++;
+            }
+
+            if (GameCoordinator.Instance != null)
+            {
+                GameCoordinator.Instance.NotifyBlockSpawned(instance, countsAsProgress);
             }
         }
 
@@ -280,6 +319,7 @@ namespace InfinityRunner
                 return;
             }
 
+            ClearBlockRuntime(block.Root);
             block.Root.SetActive(false);
             if (!block.ReturnToPool)
             {
@@ -299,12 +339,32 @@ namespace InfinityRunner
             pool.Enqueue(block.Root);
         }
 
+        private void ResetBlockRuntime(GameObject root)
+        {
+            ClearPowerUpSpawnPoints(root);
+            ResetInteractables(root);
+        }
+
+        private void ClearBlockRuntime(GameObject root)
+        {
+            ClearPowerUpSpawnPoints(root);
+        }
+
         private void ResetInteractables(GameObject root)
         {
             RunnerInteractable[] interactables = root.GetComponentsInChildren<RunnerInteractable>(true);
             for (int i = 0; i < interactables.Length; i++)
             {
                 interactables[i].ResetInteraction();
+            }
+        }
+
+        private void ClearPowerUpSpawnPoints(GameObject root)
+        {
+            PowerUpSpawnPoint[] spawnPoints = root.GetComponentsInChildren<PowerUpSpawnPoint>(true);
+            for (int i = 0; i < spawnPoints.Length; i++)
+            {
+                spawnPoints[i].ClearSpawnedPickup();
             }
         }
 

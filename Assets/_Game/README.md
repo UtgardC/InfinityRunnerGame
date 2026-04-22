@@ -1,46 +1,43 @@
-# Infinity Runner: arquitectura simplificada
+# Infinity Runner: runtime actual
 
-Este documento describe el runtime actual de `Assets/_Game` después del recorte del prototipo anterior.
+Este documento describe la arquitectura activa de `Assets/_Game` despues del recorte del prototipo anterior.
 
-La idea de esta versión es simple:
+La idea de esta version es simple:
 
 - escena authorada a mano,
-- referencias explícitas en inspector,
+- referencias explicitas en inspector,
 - bloques generados desde prefabs,
-- obstáculos marcados de forma clara,
-- y eventos especiales separados en scripts chicos.
+- hazards marcados de forma clara,
+- menu y HUD separados en scripts chicos,
+- y sin autowiring ni construccion de escena por codigo.
 
-Se eliminaron del flujo principal:
-
-- menú,
-- UI runtime,
-- clash,
-- power ups,
-- builder/editor bootstrap,
-- y cualquier autoconstrucción de escena por código.
-
-## 1. Núcleo actual
+## 1. Flujo general
 
 ### `GameCoordinator`
 
 Archivo: `Scripts/Runtime/Gameplay/GameCoordinator.cs`
 
+Es el orquestador principal. Maneja estos estados:
+
+- `Menu`
+- `TransitionToRun`
+- `Running`
+- `GameOver`
+- `TransitionToMenu`
+
 Responsabilidades:
 
-- iniciar la run apenas arranca la escena,
-- reiniciar con `R`,
-- conectar config, player, score, input y generador,
+- entrar al menu al iniciar la escena,
+- arrancar la run desde el menu,
+- reiniciar con `R` despues de perder,
+- volver al menu desde UI,
+- conectar config, player, score, input, camara y generador,
 - resolver contactos con `Person`, `Destructible` y `Death`,
-- disparar `GameOver`.
+- y disparar `GameOver`.
 
-Decisión importante:
+No hace `Find`, no crea componentes y no arma escena.
 
-- no hace `Find`,
-- no crea componentes,
-- no crea UI,
-- no arma escena.
-
-Si falta una referencia importante, loguea error y no arranca.
+## 2. Player y controles
 
 ### `PlayerRunnerController`
 
@@ -50,50 +47,142 @@ Responsabilidades:
 
 - cambio entre 3 carriles,
 - salto scriptado,
-- rotación visual de la roca,
+- fast fall en el aire,
+- rotacion visual de la roca,
 - reenviar colisiones y triggers al coordinador.
 
-La roca queda cerca del origen y el mundo se mueve hacia atrás.
+La roca queda cerca del origen y el mundo se mueve hacia atras.
 
 ### `RunnerInputReader`
 
 Archivo: `Scripts/Runtime/Gameplay/RunnerInputReader.cs`
 
-Responsabilidades:
+Teclado:
 
-- teclado:
-  - `A` / `Left`
-  - `D` / `Right`
-  - `W` / `Up`
-  - `Space` / `Enter`
-  - `R`
-- touch:
-  - swipe horizontal para carril,
-  - tap para salto.
+- `A` / `Left`: carril izquierdo
+- `D` / `Right`: carril derecho
+- `W` / `Up`: salto
+- `Space` / `Enter`: salto
+- `S` / `Down`: fast fall
+- `R`: reinicio desde `GameOver`
+
+Touch:
+
+- swipe horizontal para carril,
+- tap para salto.
+
+### `RunnerConfig`
+
+Archivo: `Scripts/Runtime/Config/RunnerConfig.cs`
+
+Variables importantes:
+
+- `laneSpacing`
+- `laneChangeDuration`
+- `jumpVelocity`
+- `gravity`
+- `fastFallVelocity`
+- `spawnAheadDistance`
+- `despawnBehindDistance`
+
+## 3. Score y HUD
 
 ### `RunnerScore`
 
 Archivo: `Scripts/Runtime/Gameplay/RunnerScore.cs`
 
-Responsabilidades:
+Guarda:
 
-- distancia,
+- distancia recorrida,
+- score total,
 - bonus por personas,
 - bonus por destruibles.
 
-## 2. Generación por prefabs
+Regla actual:
+
+- el score solo crece por interacciones,
+- la distancia se acumula aparte,
+- y `metersPerSpeedUnit` define cuantos metros suma el runner por cada unidad de velocidad del mundo.
+
+### `GameUI`
+
+Archivo: `Scripts/Runtime/UI/GameUI.cs`
+
+UI runtime minima:
+
+- actualiza un `TMP_Text` para score,
+- actualiza un `TMP_Text` para distancia mostrada en millas,
+- muestra HUD durante gameplay,
+- muestra panel de game over,
+- expone `ReturnToMenuButton()` para enlazar al boton de volver al menu.
+
+## 4. Menu e intro
+
+### `MainMenuUI`
+
+Archivo: `Scripts/Runtime/UI/MainMenuUI.cs`
+
+Expone funciones pensadas para botones de Unity UI:
+
+- `StartGameButton()`
+- `ExitGameButton()`
+- `OpenHowToButton()`
+- `CloseHowToButton()`
+
+Tambien maneja:
+
+- `menuRoot`
+- `howToPanel`
+- `blackScreen` con `CanvasGroup`
+
+### `RunnerCameraController`
+
+Archivo: `Scripts/Runtime/Gameplay/RunnerCameraController.cs`
+
+Tiene dos poses:
+
+- menu
+- runner
+
+Puede authorarse de dos formas:
+
+- con pivot de menu (`menuPositionPivot`) y target de menu (`menuLookTarget`),
+- o con pivots opcionales para gameplay (`runnerPositionPivot`, `runnerLookTarget`) mas offsets como fallback del runner.
+
+Y soporta:
+
+- `SnapToMenu()`
+- `SnapToRunner()`
+- `TransitionToRunner(duration)`
+
+La transicion de inicio usa blend de camara mientras la run empieza a acelerar.
+
+Curvas editables en inspector:
+
+- `positionTransitionCurve`
+- `rotationTransitionCurve`
+
+La posicion y la rotacion se evaluan por separado para poder ajustar mejor el feeling de entrada.
+
+Regla de tiempo:
+
+- el eje `X` de cada curva se interpreta como segundos reales,
+- el eje `Y` se usa como valor de blend,
+- y la transicion total dura lo que marque la curva mas larga.
+
+`startTransitionDuration` queda como fallback si una curva no tiene claves validas.
+
+## 5. Generacion por prefabs
 
 ### `BlockDefinition`
 
 Archivo: `Scripts/Runtime/Config/BlockDefinition.cs`
 
-Cada definición tiene:
+Cada definicion tiene:
 
 - `prefab`
 - `allowedStages`
 - `weight`
-
-No hay reglas escondidas de clash, rampas, powerups ni combinaciones especiales.
 
 ### `BlockMetadata`
 
@@ -105,68 +194,77 @@ Campo clave:
 
 - `length`
 
-Ese largo es el que usa el generador para encadenar y reciclar bloques.
-
 ### `WorldGenerator`
 
 Archivo: `Scripts/Runtime/Generation/WorldGenerator.cs`
 
 Responsabilidades:
 
-- mover `worldRoot` hacia atrás,
-- mantener `worldRoot` fijo para no acumular error de precisión,
+- mantener `worldRoot` fijo,
+- mover los bloques activos hacia atras,
 - mantener bloques por delante,
-- reciclar bloques con pooling básico,
-- elegir bloques válidos por stage,
-- cambiar stage según cantidad de bloques generados.
+- reciclar bloques con pooling basico,
+- elegir bloques validos por stage,
+- cambiar stage segun cantidad de bloques generados,
+- soportar preview de menu con bloque inicial,
+- y escalar velocidad durante la intro.
 
-También soporta un bloque inicial opcional:
+Metodos importantes:
 
-- `initialBlockDefinition`
+- `PrepareMenuPreview()`
+- `BeginRunFromPreview(initialSpeedScale)`
+- `RestartGameplay(initialSpeedScale)`
+- `StopRun()`
+- `SetSpeedScale(normalizedScale)`
+
+### Bloque inicial
+
+`initialBlockDefinition` es opcional.
 
 Ese bloque:
 
-- aparece una sola vez al comenzar la run,
-- sirve para introducir el nivel,
+- aparece al entrar al menu y al reiniciar la partida,
+- sirve para la intro visual,
 - no suma progreso de dificultad,
-- y no entra al pool normal al salir de pantalla.
+- no entra al pool normal,
+- y desaparece cuando queda atras del jugador.
 
-La progresión ya no depende de clash.
+### `PowerUpSpawnPoint`
 
-Ahora cada `DifficultyStageConfig` define:
+Archivo: `Scripts/Runtime/Generation/PowerUpSpawnPoint.cs`
+
+Es un placeholder authorado dentro del prefab del bloque.
+
+Cada punto puede definir:
+
+- `spawnAnchor`
+- `allowedTypes`
+
+El bloque guarda el punto de aparicion, no el powerup en si.
+
+## 6. Stages
+
+### `DifficultyStageConfig`
+
+Archivo: `Scripts/Runtime/Config/DifficultyStageConfig.cs`
+
+Cada stage define:
 
 - `stage`
 - `speedMetersPerSecond`
 - `startAfterBlockCount`
 
-Eso permite algo mucho más directo:
+La progresion ya no depende de clash.
 
-- bloque 0 a N: `Start`
-- después: `Middle`
-- después: `Late`
-
-## 3. Cómo authorar bloques
-
-Flujo recomendado:
-
-1. Crear un prefab para el segmento.
-2. Agregar `BlockMetadata`.
-3. Ajustar `length`.
-4. Decorarlo con meshes, colliders, personas y obstáculos.
-5. Crear un `BlockDefinition` que apunte a ese prefab.
-6. Agregar la definición al array de `WorldGenerator`.
-
-## 4. Sistema de colisiones y hazards
+## 7. Colisiones y hazards
 
 ### Regla general
 
 Un objeto mata al jugador si cumple una de estas condiciones:
 
 - tiene `RunnerInteractable` con `interactionType = Death`,
-- está en la tag `Death`,
-- está en la layer `Death`.
-
-Se agregó la tag `Death` y también una layer `Death` al proyecto.
+- esta en la tag `Death`,
+- esta en la layer `Death`.
 
 ### `RunnerInteractable`
 
@@ -177,84 +275,120 @@ Tipos actuales:
 - `Death`
 - `Person`
 - `Destructible`
-
-Eso deja un flujo muy claro:
-
-- `Person`: da puntos y desaparece.
-- `Destructible`: da puntos y llama a `DestructibleProp` si existe.
-- `Death`: termina la run.
+- `PowerUp`
 
 ### `RunnerCollisionUtility`
 
 Archivo: `Scripts/Runtime/Gameplay/RunnerCollisionUtility.cs`
 
-Es solo una ayuda estática para:
+Ayuda estatica para:
 
-- encontrar un `RunnerInteractable` en la jerarquía del collider,
+- encontrar `RunnerInteractable` en la jerarquia del collider,
 - decidir si algo cuenta como `Death`.
 
-## 5. Humanos
+## 8. Power ups
+
+### `PowerUpDefinition`
+
+Archivo: `Scripts/Runtime/Config/PowerUpDefinition.cs`
+
+Cada definicion expone:
+
+- `type`
+- `durationSeconds`
+- `spawnWeight`
+- `pickupPrefab`
+- `scoreMultiplierValue`
+
+### `PowerUpPickup`
+
+Archivo: `Scripts/Runtime/Interaction/PowerUpPickup.cs`
+
+Es el recogible real. Lleva la definicion aplicada en runtime y se destruye al recogerse o al limpiarse el bloque reciclado.
+
+### Flujo de spawn
+
+El spawn lo decide `GameCoordinator`.
+
+Regla actual:
+
+- el intento de powerup se programa por cantidad de bloques,
+- solo se intenta al spawnear un bloque nuevo,
+- el bloque recien generado es el unico candidato,
+- si ese bloque no tiene un placeholder valido, el intento queda pendiente para el siguiente bloque compatible,
+- y al reciclar un bloque se limpian todos los pickups que hubiese generado.
+
+Powerups implementados en este corte:
+
+- `InvincibleRock`: evita `GameOver` por hazards mientras dura.
+- `ScoreMultiplier`: multiplica los puntos ganados por interacciones mientras dura.
+
+## 9. Humanos
 
 ### `HumanPickup`
 
 Archivo: `Scripts/Runtime/Interaction/HumanPickup.cs`
 
-Versión actual:
+Version actual:
 
-- avanza en `local +Z`,
-- se aleja de la roca a velocidad fija,
-- si un raycast hacia adelante detecta algo marcado como `Death`, se queda quieto.
+- avanza hacia adelante a velocidad fija,
+- se aleja de la roca,
+- se queda quieto si detecta un hazard `Death` delante,
+- al tocar la roca da puntos y desaparece.
 
-No tiene animaciones ni bob obligatorio. Eso queda para más adelante.
-
-## 6. Obstáculos especiales
-
-La base común ahora es:
+## 10. Obstaculos especiales
 
 ### `DistanceTriggeredObstacle`
 
 Archivo: `Scripts/Runtime/Gameplay/DistanceTriggeredObstacle.cs`
 
-Idea:
+Base comun para eventos activados por distancia y velocidad.
 
-- cada obstáculo define un `triggerLeadTime`,
-- el trigger real se calcula con la velocidad actual,
-- así la animación empieza cuando el jugador está a la distancia correcta para que el evento llegue "justo".
-
-La fórmula práctica es:
+Formula:
 
 - distancia de trigger = `speed * triggerLeadTime`
-- con clamp por `minTriggerDistance` y `maxTriggerDistance`
+
+Con clamp por:
+
+- `minTriggerDistance`
+- `maxTriggerDistance`
+
+Tambien dibuja gizmos de preview usando:
+
+- `gizmoPreviewSpeed`
+- `gizmoSphereRadius`
+- `gizmoColor`
 
 ### Implementaciones actuales
 
 #### `FallingPillarObstacle`
 
-- espera `telegraphDuration`,
-- cae durante `fallDuration`,
-- cambia de collider vertical a collider caído.
+- telegraph,
+- caida,
+- cambio de collider vertical a collider caido.
 
 #### `DynamicCartObstacle`
 
 - telegraph corto,
 - lee el carril actual del jugador,
-- cruza hacia ese carril.
+- cruza al carril objetivo.
 
 #### `CatapultObstacle`
 
 - telegraph,
-- anima el brazo,
-- lanza un proyectil simple,
-- la catapulta puede seguir siendo `Death` por collider/tag/layer.
+- puede disparar un `Animator` por trigger,
+- usa `fireTriggerName`,
+- instancia un proyectil simple,
+- y la propia catapulta puede seguir siendo `Death`.
 
 #### `MovingHazardProjectile`
 
-- mueve el proyectil en una dirección fija,
-- se destruye solo por tiempo.
+- movimiento lineal,
+- autodestruccion por tiempo.
 
-## 7. Escena mínima esperada
+## 11. Wiring minimo de escena
 
-La escena debería tener, como mínimo:
+La escena deberia tener, como minimo:
 
 - `GameCoordinator`
 - `RunnerScore`
@@ -262,9 +396,12 @@ La escena debería tener, como mínimo:
 - `WorldGenerator`
 - `PlayerRunnerController`
 - `RunnerCameraController`
+- `MainMenuUI`
+- `GameUI`
+- cero o mas `PowerUpDefinition`
 - un `RunnerConfig`
-- uno o más `DifficultyStageConfig`
-- uno o más `BlockDefinition`
+- uno o mas `DifficultyStageConfig`
+- uno o mas `BlockDefinition`
 
 Referencias importantes:
 
@@ -274,35 +411,48 @@ Referencias importantes:
   - `worldGenerator`
   - `score`
   - `inputReader`
-  - opcional `cameraController`
+  - `cameraController`
+  - `mainMenuUI`
+  - `gameUI`
+  - opcional `powerUpDefinitions`
+  - `minBlocksBetweenPowerUpAttempts`
+  - `maxBlocksBetweenPowerUpAttempts`
 - en `WorldGenerator`:
   - `config`
   - `difficultyStages`
   - `blockDefinitions`
+  - opcional `initialBlockDefinition`
   - opcional `worldRoot`
 - en `PlayerRunnerController`:
   - `config`
   - opcional `visualRoot`
+- en `GameUI`:
+  - `scoreText`
+  - `milesText`
+  - `hudRoot`
+  - `gameOverRoot`
+- en `MainMenuUI`:
+  - `menuRoot`
+  - `howToPanel`
+  - `blackScreen`
 
-## 8. Qué se eliminó
+## 12. Que salio del codigo activo
 
-Salió completamente del código activo:
+Sigue fuera del runtime principal:
 
 - clash,
-- power ups,
 - rampa divina,
-- UI generada por código,
-- builder/editor que fabricaba escenas y prefabs,
-- pooling interno de pickups runtime,
-- autowiring por búsqueda global.
+- builder/editor que fabricaba escenas,
+- autowiring por busqueda global,
+- y cualquier logica generica para tapar referencias faltantes.
 
-## 9. Siguiente paso razonable
+## 13. Siguiente paso razonable
 
-La base ya quedó lista para iterar con prefabs authorados.
+La base ya esta lista para iterar por inspector y prefabs reales.
 
-El próximo paso lógico es:
+Los siguientes pasos naturales son:
 
-1. crear un set chico de bloques reales,
-2. conectar los assets en la escena,
-3. probar el loop básico de correr, saltar, esquivar y sumar puntos,
-4. recién después reintroducir obstáculos más complejos uno por uno.
+1. cablear la UI de menu y HUD en la escena,
+2. authorar varios bloques reales con hazards,
+3. probar humanos y obstaculos especiales en contexto,
+4. y recien despues sumar eventos mas complejos.

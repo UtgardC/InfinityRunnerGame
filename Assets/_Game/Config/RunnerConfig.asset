@@ -16,8 +16,9 @@ MonoBehaviour:
   laneChangeDuration: 0.18
   jumpVelocity: 12.5
   gravity: 28
+  fastFallVelocity: 21
   groundHeight: 0.75
-  visualRollSpeed: 75
+  visualRollSpeed: 50
   spawnAheadDistance: 130
   despawnBehindDistance: 45
   maxBlocksActive: 7
