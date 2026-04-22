@@ -42,7 +42,10 @@ namespace InfinityRunner
                 coordinator.RequestLaneChange(1);
             }
 
-            if (keyboard.spaceKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame)
+            if (keyboard.spaceKey.wasPressedThisFrame
+                || keyboard.enterKey.wasPressedThisFrame
+                || keyboard.wKey.wasPressedThisFrame
+                || keyboard.upArrowKey.wasPressedThisFrame)
             {
                 coordinator.RequestJump();
             }
@@ -50,6 +53,11 @@ namespace InfinityRunner
             if (keyboard.rKey.wasPressedThisFrame)
             {
                 coordinator.RequestRestart();
+            }
+
+            if (keyboard.sKey.wasPressedThisFrame || keyboard.downArrowKey.wasPressedThisFrame)
+            {
+                coordinator.RequestFastFall();
             }
         }
 

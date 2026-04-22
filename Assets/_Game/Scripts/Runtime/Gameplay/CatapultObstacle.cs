@@ -5,10 +5,12 @@ namespace InfinityRunner
 {
     public sealed class CatapultObstacle : DistanceTriggeredObstacle
     {
+        public Animator catapultAnimator;
         public Transform arm;
         public Transform firePoint;
         public MovingHazardProjectile projectilePrefab;
         public Renderer warningRenderer;
+        public string fireTriggerName = "Fire";
         public float telegraphDuration = 1.1f;
         public float launchAnimationDuration = 0.2f;
         public float projectileSpeed = 42f;
@@ -41,6 +43,12 @@ namespace InfinityRunner
 
             triggerLeadTime = telegraphDuration + launchAnimationDuration;
 
+            if (catapultAnimator != null)
+            {
+                catapultAnimator.Rebind();
+                catapultAnimator.Update(0f);
+            }
+
             if (arm != null)
             {
                 arm.localRotation = armStartRotation;
@@ -68,12 +76,14 @@ namespace InfinityRunner
             while (elapsed < telegraphDuration)
             {
                 elapsed += Time.deltaTime;
-                if (arm != null)
+                if (catapultAnimator == null && arm != null)
                 {
                     arm.localRotation = armStartRotation * Quaternion.Euler(-55f * Mathf.Clamp01(elapsed / telegraphDuration), 0f, 0f);
                 }
                 yield return null;
             }
+
+            PlayFireAnimation();
 
             if (projectilePrefab != null)
             {
@@ -87,7 +97,7 @@ namespace InfinityRunner
             while (elapsed < launchAnimationDuration)
             {
                 elapsed += Time.deltaTime;
-                if (arm != null)
+                if (catapultAnimator == null && arm != null)
                 {
                     float t = Mathf.Clamp01(elapsed / launchAnimationDuration);
                     arm.localRotation = armStartRotation * Quaternion.Euler(Mathf.Lerp(-55f, 20f, t), 0f, 0f);
@@ -101,6 +111,17 @@ namespace InfinityRunner
             }
 
             fireRoutine = null;
+        }
+
+        private void PlayFireAnimation()
+        {
+            if (catapultAnimator == null || string.IsNullOrEmpty(fireTriggerName))
+            {
+                return;
+            }
+
+            catapultAnimator.ResetTrigger(fireTriggerName);
+            catapultAnimator.SetTrigger(fireTriggerName);
         }
     }
 }

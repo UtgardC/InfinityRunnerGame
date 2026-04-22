@@ -64,6 +64,7 @@ Responsabilidades:
 - teclado:
   - `A` / `Left`
   - `D` / `Right`
+  - `W` / `Up`
   - `Space` / `Enter`
   - `R`
 - touch:
@@ -113,10 +114,22 @@ Archivo: `Scripts/Runtime/Generation/WorldGenerator.cs`
 Responsabilidades:
 
 - mover `worldRoot` hacia atrás,
+- mantener `worldRoot` fijo para no acumular error de precisión,
 - mantener bloques por delante,
 - reciclar bloques con pooling básico,
 - elegir bloques válidos por stage,
 - cambiar stage según cantidad de bloques generados.
+
+También soporta un bloque inicial opcional:
+
+- `initialBlockDefinition`
+
+Ese bloque:
+
+- aparece una sola vez al comenzar la run,
+- sirve para introducir el nivel,
+- no suma progreso de dificultad,
+- y no entra al pool normal al salir de pantalla.
 
 La progresión ya no depende de clash.
 

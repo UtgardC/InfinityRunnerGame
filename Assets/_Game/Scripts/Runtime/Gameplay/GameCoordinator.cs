@@ -108,6 +108,14 @@ namespace InfinityRunner
             }
         }
 
+        public void RequestFastFall()
+        {
+            if (state == RunnerState.Running && player != null)
+            {
+                player.FastFall();
+            }
+        }
+
         public void AddDistance(float meters)
         {
             if (state == RunnerState.Running && score != null)

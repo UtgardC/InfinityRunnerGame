@@ -12,6 +12,7 @@ namespace InfinityRunner
         [Header("Jump")]
         [Min(0.1f)] public float jumpVelocity = 12.5f;
         [Min(0.1f)] public float gravity = 28f;
+        [Min(0.1f)] public float fastFallVelocity = 24f;
         [Min(0f)] public float groundHeight = 0.75f;
         [Min(0f)] public float visualRollSpeed = 75f;
 

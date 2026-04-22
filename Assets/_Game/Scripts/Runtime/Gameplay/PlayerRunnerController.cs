@@ -107,6 +107,16 @@ namespace InfinityRunner
             verticalVelocity = config.jumpVelocity;
         }
 
+        public void FastFall()
+        {
+            if (controlsLocked || grounded || config == null)
+            {
+                return;
+            }
+
+            verticalVelocity = Mathf.Min(verticalVelocity, -config.fastFallVelocity);
+        }
+
         private void UpdateLanePosition()
         {
             float targetX = config.LaneToX(targetLane);

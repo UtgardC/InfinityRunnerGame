@@ -7,6 +7,7 @@ namespace InfinityRunner
     {
         public RunnerConfig config;
         public DifficultyStageConfig[] difficultyStages;
+        public BlockDefinition initialBlockDefinition;
         public BlockDefinition[] blockDefinitions;
         public Transform worldRoot;
 
@@ -67,7 +68,7 @@ namespace InfinityRunner
             }
 
             float distance = CurrentSpeed * Time.deltaTime;
-            MoveWorld(distance);
+            MoveBlocks(distance);
             if (GameCoordinator.Instance != null)
             {
                 GameCoordinator.Instance.AddDistance(distance);
@@ -79,6 +80,7 @@ namespace InfinityRunner
         public void BeginRun()
         {
             ResetWorld();
+            SpawnInitialBlockIfAssigned();
             running = true;
             EnsureBlocksAhead();
         }
@@ -108,9 +110,20 @@ namespace InfinityRunner
             activeBlocks.Clear();
         }
 
-        private void MoveWorld(float distance)
+        private void MoveBlocks(float distance)
         {
-            worldRoot.position += Vector3.back * distance;
+            for (int i = 0; i < activeBlocks.Count; i++)
+            {
+                GameObject root = activeBlocks[i].Root;
+                if (root == null)
+                {
+                    continue;
+                }
+
+                root.transform.localPosition += Vector3.back * distance;
+            }
+
+            nextSpawnLocalZ -= distance;
         }
 
         private void EnsureBlocksAhead()
@@ -133,6 +146,16 @@ namespace InfinityRunner
             }
         }
 
+        private void SpawnInitialBlockIfAssigned()
+        {
+            if (initialBlockDefinition == null || initialBlockDefinition.prefab == null)
+            {
+                return;
+            }
+
+            SpawnBlock(initialBlockDefinition, 0f, false, false);
+        }
+
         private bool ShouldSpawnAnotherBlock()
         {
             if (activeBlocks.Count >= config.maxBlocksActive)
@@ -146,7 +169,7 @@ namespace InfinityRunner
             }
 
             BlockRuntime lastBlock = activeBlocks[activeBlocks.Count - 1];
-            return lastBlock.Root.transform.position.z + lastBlock.Length < config.spawnAheadDistance;
+            return lastBlock.Root.transform.localPosition.z + lastBlock.Length < config.spawnAheadDistance;
         }
 
         private BlockDefinition SelectNextBlock()
@@ -187,7 +210,12 @@ namespace InfinityRunner
 
         private void SpawnBlock(BlockDefinition definition, float localZ)
         {
-            GameObject instance = GetBlockInstance(definition);
+            SpawnBlock(definition, localZ, true, true);
+        }
+
+        private void SpawnBlock(BlockDefinition definition, float localZ, bool returnToPool, bool countsAsProgress)
+        {
+            GameObject instance = GetBlockInstance(definition, returnToPool);
             BlockMetadata metadata = instance.GetComponent<BlockMetadata>();
             if (metadata == null)
             {
@@ -203,13 +231,21 @@ namespace InfinityRunner
             instance.SetActive(true);
             ResetInteractables(instance);
 
-            activeBlocks.Add(new BlockRuntime(definition, instance, metadata.length));
+            activeBlocks.Add(new BlockRuntime(definition, instance, metadata.length, returnToPool));
             nextSpawnLocalZ += metadata.length;
-            spawnedBlockCount++;
+            if (countsAsProgress)
+            {
+                spawnedBlockCount++;
+            }
         }
 
-        private GameObject GetBlockInstance(BlockDefinition definition)
+        private GameObject GetBlockInstance(BlockDefinition definition, bool canUsePool)
         {
+            if (!canUsePool)
+            {
+                return Instantiate(definition.prefab);
+            }
+
             Queue<GameObject> pool;
             if (blockPools.TryGetValue(definition, out pool) && pool.Count > 0)
             {
@@ -229,7 +265,7 @@ namespace InfinityRunner
             for (int i = activeBlocks.Count - 1; i >= 0; i--)
             {
                 BlockRuntime block = activeBlocks[i];
-                if (block.Root.transform.position.z + block.Length < -config.despawnBehindDistance)
+                if (block.Root.transform.localPosition.z + block.Length < -config.despawnBehindDistance)
                 {
                     activeBlocks.RemoveAt(i);
                     DespawnBlock(block);
@@ -245,6 +281,12 @@ namespace InfinityRunner
             }
 
             block.Root.SetActive(false);
+            if (!block.ReturnToPool)
+            {
+                Destroy(block.Root);
+                return;
+            }
+
             block.Root.transform.SetParent(transform, false);
 
             Queue<GameObject> pool;
@@ -292,12 +334,14 @@ namespace InfinityRunner
             public readonly BlockDefinition Definition;
             public readonly GameObject Root;
             public readonly float Length;
+            public readonly bool ReturnToPool;
 
-            public BlockRuntime(BlockDefinition definition, GameObject root, float length)
+            public BlockRuntime(BlockDefinition definition, GameObject root, float length, bool returnToPool)
             {
                 Definition = definition;
                 Root = root;
                 Length = length;
+                ReturnToPool = returnToPool;
             }
         }
     }
